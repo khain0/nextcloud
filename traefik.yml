@@ -1,0 +1,61 @@
+services:
+  ################################################
+  ####        Traefik Proxy Setup           #####
+  ###############################################
+  traefik:
+    image: traefik:latest
+    restart: always
+    container_name: traefik
+    networks:
+      - frontend
+    ports:
+      - "80:80" # <== http
+      #- "8080:8080" # <== :8080 is where the dashboard runs on, but it will be redirected to 443, so no need to open the port
+      - "443:443" # <== https
+    command:
+    #### These are the CLI commands that will configure Traefik and tell it how to work! ####
+      ## API Settings - https://docs.traefik.io/operations/api/, endpoints - https://docs.traefik.io/operations/api/#endpoints ##
+      - --api.insecure=true # <== Enabling insecure api, NOT RECOMMENDED FOR PRODUCTION, but it will be redirected to 443 with password protection
+      - --api.dashboard=true # <== Enabling the dashboard to view services, middlewares, routers, etc...
+      - --api.debug=true # <== Enabling additional endpoints for debugging and profiling
+      ## Log Settings (options: ERROR, DEBUG, PANIC, FATAL, WARN, INFO) - https://docs.traefik.io/observability/logs/ ##
+      - --log.level=DEBUG # <== Setting the level of the logs from traefik
+      ## Provider Settings - https://docs.traefik.io/providers/docker/#provider-configuration ##
+      - --providers.docker=true # <== Enabling docker as the provider for traefik
+      - --providers.docker.exposedbydefault=false # <== Don't expose every container to traefik, only expose enabled ones
+      #- --providers.file.filename=/dynamic.yaml # <== Referring to a dynamic configuration file
+      ## Entrypoints Settings - https://docs.traefik.io/routing/entrypoints/#configuration ##
+      - --entrypoints.web.address=:80 # <== Defining an entrypoint for port :80 named web
+      - --entrypoints.web-secured.address=:443 # <== Defining an entrypoint for https on port :443 named web-secured
+      - --entrypoints.web.transport.respondingtimeouts.readtimeout=0s # disable readTimeout to avoid upload timeouts in Nextcloud
+
+      ## Certificate Settings (Let's Encrypt) -  https://docs.traefik.io/https/acme/#configuration-examples ##
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.storage=/certificate/acme.json
+      - --certificatesresolvers.letsencrypt.acme.email=$$EMAIL_ADDRESS
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # <== Volume for docker admin
+     # - /ssd/traefik/dynamic.yaml:/dynamic.yaml # <== Volume for dynamic conf file, **ref: line 26
+      - /ssd/letsencrypt/:/certificate/ #<== store Let's Encrypt certificate
+
+    labels:
+    #### Labels define the behavior and rules of the traefik proxy for this container ####
+      - "traefik.enable=true" # <== Enable traefik on itself to view dashboard and assign subdomain to view it
+      - "traefik.docker.network=traefik_frontend" # <== inform trafeik which subnet should be used for connection to containers, netowrk name contains: <name_of_container>_<name_of_network>
+      - "traefik.http.routers.traefik-http.rule=Host(`$$TRAFEIK_FQDN`)" # <== Setting the domain for the dashboard
+      - "traefik.http.routers.traefik-http.middlewares=traefik-https" # < == redirect to redirect traffic to https
+      - "traefik.http.routers.traefik-https.rule=Host(`$$TRAFEIK_FQDN`)" # <== Setting the domain for the dashboard through https
+      - "traefik.http.middlewares.traefik-https.redirectscheme.scheme=https" # <== redirect traffic to https
+      - "traefik.http.routers.traefik-https.tls=true" # Enable TLS for API
+      - "traefik.http.routers.traefik-https.middlewares=traefik-auth" # Enable autorization for API through https
+      - "traefik.http.routers.traefik-https.service=traefik-svc" #Enable api service through https
+      - "traefik.http.services.traefik-svc.loadbalancer.server.port=8080" #configure port for API
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=$$TRAFEIK_USER:$$TRAFEIK_PASSWORD_HASH" #Configure user and password, **ref: line 58
+      - "traefik.experimental.plugins.fail2ban.moduleName=github.com/tomMoulard/fail2ban"
+      - "traefik.experimental.plugins.fail2ban.version=v0.8.1"
+      # Generate password using htpasswd: echo $(htpasswd -nB your_username) | sed -e s/\\$/\\$\\$/g
+      #- "traefik.http.routers.traefik.service=api@internal" # <== Enabling the api to be a service to access
+networks:
+  frontend:
