@@ -1,0 +1,106 @@
+
+services:
+  nextcloud_www:
+    image: nextcloud:latest
+    container_name: nextcloud_www
+    restart: unless-stopped
+    networks:
+      - traefik
+      - backend
+
+    depends_on:
+      - redis
+    volumes:
+      - /ssd/nextcloud_www/:/var/www/html
+      - /ssd/cloud_data:/var/www/html/data
+      #- /ssd/nextcloud_tmp:/tmp
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Warsaw
+      - PHP_UPLOAD_LIMIT=16G
+      - PHP_MEMORY_LIMIT=16G
+      - POST_MAX_SIZE=16G
+      - MAX_INPUT_TIME=3600
+      - MAX_EXECUTION_TIME=3600
+      #- APACHE_BODY_LIMIT=0
+      - REDIS_HOST=redis
+      - MYSQL_DATABASE=$$MYSQL_DATABASE_NAME
+      - MYSQL_USER=$$MYSQL_USERNAME
+      - MYSQL_PASSWORD=$$MYSQL_PASSWORD
+      - MYSQL_HOST=nextcloud_db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_frontend"
+      - "traefik.http.routers.nextcloud-http.entrypoints=web"
+      - "traefik.http.routers.nextcloud-http.middlewares=nextcloud-https"
+      - "traefik.http.routers.nextcloud-http.rule=Host(`$$NEXTCLOUD_FQDN`)"
+      - "traefik.http.routers.nextcloud-https.entrypoints=web-secured"
+      - "traefik.http.routers.nextcloud-https.rule=Host(`$$NEXTCLOUD_FQDN`)"
+      - "traefik.http.routers.nextcloud-https.tls=true"
+      - "traefik.http.middlewares.nextcloud-https.redirectscheme.scheme=https"
+      #Enable HTTP Strict Transport Security 
+      - "traefik.http.middlewares.nextcloudHeader.headers.stsSeconds=15552000"
+      - "traefik.http.middlewares.nextcloudHeader.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.nextcloudHeader.headers.stsPreload=true"
+      - "traefik.http.middlewares.nextcloudHeader.headers.forceSTSHeader=true"
+      - "traefik.http.routers.nextcloud-https.middlewares=nextcloudHeader"
+
+      #- "traefik.http.routers.nextcloud-https.middlewares=nextcloud_header"
+      #- "traefik.http.middlewares.nextcloud_header.headers.referrerPolicy=no-referrer"
+      #- "traefik.http.middlewares.nextcloud_header.headers.stsSeconds=31536000"
+      #- "traefik.http.middlewares.nextcloud_header.headers.forceSTSHeader=true"
+      #- "traefik.http.middlewares.nextcloud_header.headers.stsPreload=true"
+      #- "traefik.http.middlewares.nextcloud_header.headers.stsIncludeSubdomains=true"
+      #- "traefik.http.middlewares.nextcloud_header.headers.browserXssFilter=true"
+      #- "traefik.http.middlewares.nextcloud_header.headers.customRequestHeaders.X-Forwarded-Proto=https"
+  collabora:
+    image: collabora/code:latest
+    container_name: nextcloud_collabora
+    restart: unless-stopped
+    networks: 
+      - backend
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Warsaw
+      - password=$$COLLABORA_PASSWORD
+      - username=$$COLLABORA_USER
+      - domain=$$NEXTCLOUD_FQDN
+      - extra_params=--o:ssl.enable=true
+    ports:
+      - 9980:9980
+  redis:
+    image: redis:alpine
+    container_name: nextcloud_redis
+    restart: unless-stopped
+    networks:
+      - backend
+    depends_on:
+      - nextcloud_db
+    expose:
+      - 6379
+
+  nextcloud_db:
+    image: mariadb:latest
+    container_name: nextcloud_db
+    restart: unless-stopped
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    networks: 
+      - backend
+    volumes:
+      - /ssd/nextcloud_db:/var/lib/mysql
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Warsaw
+      - MYSQL_ROOT_PASSWORD=$$MYSQL_ROOT_PASSWORD
+      - MYSQL_PASSWORD=$$MYSQL_PASSWORD
+      - MYSQL_DATABASE=$$MYSQL_DATABASE_NAME
+      - MYSQL_USER=$$MYSQL_USERNAME
+
+networks:
+  backend:
+  traefik:
+    name: traefik_frontend
+    external: true
