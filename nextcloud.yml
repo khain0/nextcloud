@@ -44,7 +44,12 @@ services:
       - "traefik.http.middlewares.nextcloudHeader.headers.stsIncludeSubdomains=true"
       - "traefik.http.middlewares.nextcloudHeader.headers.stsPreload=true"
       - "traefik.http.middlewares.nextcloudHeader.headers.forceSTSHeader=true"
-      - "traefik.http.routers.nextcloud-https.middlewares=nextcloudHeader"
+      #- "traefik.http.routers.nextcloud-https.middlewares=nextcloudHeader"
+      # Enable IP whitelist
+      - "traefik.http.middlewares.whitelist.ipWhiteList.sourceRange=10.0.0.0/8,172.16.0.0/16,192.168.0.0/16" #allow only clients who connect only from private subnets
+      #Combine middlewares
+      - "traefik.http.middlewares.secured.chain.middlewares=nextcloud-https,nextcloudHeader,whitelist" #combine middlewares into one
+      - "traefik.http.routers.nextcloud-https.middlewares=secured" #use combined middleware
 
       #- "traefik.http.routers.nextcloud-https.middlewares=nextcloud_header"
       #- "traefik.http.middlewares.nextcloud_header.headers.referrerPolicy=no-referrer"
