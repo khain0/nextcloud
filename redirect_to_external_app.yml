@@ -1,0 +1,22 @@
+---
+http:
+  serversTransports:
+    my_redirect:
+      insecureSkipVerify: true
+  routers:
+    my_redirect-https:
+      entrypoints: web-secured
+      rule: "Host(`$$FQDN_FRONTEND`)"
+      service: my_redirect
+      tls: true
+  middlewares:
+    my_redirect-https:
+      redirectscheme:
+        scheme: https
+  services:
+    my_redirect:
+      loadBalancer:
+        servers:
+          - url: https://$$FQDN_BACKEND:443
+        passHostHeader: true
+        serversTransport: my_redirect
