@@ -47,8 +47,10 @@ services:
       - "traefik.enable=true" # <== Enable traefik on itself to view dashboard and assign subdomain to view it
       - "traefik.docker.network=traefik_frontend" # <== inform trafeik which subnet should be used for connection to containers
       - "traefik.http.routers.traefik-http.rule=Host(`traefik.curiosity.local.com`)" # <== Setting the domain for the dashboard
+      - "traefik.http.routers.traefik-http.entrypoints=web" # <== Set entrypoint for http router
       - "traefik.http.routers.traefik-http.middlewares=traefik-https" # < == redirect to redirect traffic to https
       - "traefik.http.routers.traefik-https.rule=Host(`traefik.curiosity.local.com`)" # <== Setting the domain for the dashboard through https
+      - "traefik.http.routers.traefik-https.entrypoints=web-secured" # <== Set entrypoint for https router
       - "traefik.http.middlewares.traefik-https.redirectscheme.scheme=https" # <== redirect traffic to https
       - "traefik.http.routers.traefik-https.tls=true" # Enable TLS for API
       - "traefik.http.routers.traefik-https.middlewares=traefik-auth" # Enable autorization for API through https
